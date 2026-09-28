@@ -1,0 +1,12 @@
+{
+  "outputFolder": "output",
+  "includePersonalWorkspaces": true,
+  "continueOnItemError": true,
+  "toolPriority": [
+    "fab-native",
+    "fab-api-only-when-no-native-command",
+    "direct-rest-only-when-fab-cannot-perform-the-call"
+  ],
+  "allowFabApiFallback": false,
+  "allowDirectRestFallback": false
+}
