@@ -65,14 +65,14 @@ Run these native CLI checks before the inventory:
 fab --version
 fab ls .capacities -l
 fab ls -l
-powershell.exe -NoProfile -File tests\Test-Reusable.ps1
+powershell.exe -NoProfile -File tests\Test-All.ps1
 ```
 
 Expected results:
 
 - The CLI version is `1.0.1 (07-2025)`.
 - Capacity and workspace tables are returned.
-- The reusable test ends with `Reusable tests passed.`
+- The complete test suite ends with `All inventory tests passed.`
 
 If `fab ls` returns fewer workspaces than expected, verify the signed-in identity and its workspace roles before running the full inventory.
 

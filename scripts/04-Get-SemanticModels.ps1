@@ -10,5 +10,10 @@ foreach ($target in $targets) {
     catch { $errors += [pscustomobject]@{ id = $target.id; name = $target.name; workspaceId = $target.workspaceId; workspaceName = $target.workspaceName; sourceMethod = 'fab get (native)'; coverageStatus = 'failed'; error = $_.Exception.Message } }
 }
 Write-Progress -Activity 'Fabric inventory' -Completed
-Write-InventoryJson -InputObject ([pscustomobject]@{ semanticModels = $models; errors = $errors }) -Path $OutputPath
-[pscustomobject]@{ semanticModels = $models; errors = $errors }
+$result = [pscustomobject]@{
+    coverageSummary = [pscustomobject]@{ total = $targets.Count; complete = $models.Count; partial = 0; failed = $errors.Count }
+    semanticModels = $models
+    errors = $errors
+}
+Write-InventoryJson -InputObject $result -Path $OutputPath
+$result

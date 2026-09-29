@@ -4,6 +4,8 @@ Windows PowerShell 5.1-compatible inventory for the Fabric environment, built ar
 
 For transferring and running this project on another machine, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
+For a source-control download and execution email, see [EMAIL-DEPLOYMENT-INSTRUCTIONS.md](EMAIL-DEPLOYMENT-INSTRUCTIONS.md).
+
 ## Tool priority
 
 1. Native `fab` commands.
@@ -21,8 +23,8 @@ Runtime compatibility was validated with Windows PowerShell `5.1.26100.9444`. Po
 - `scripts/01-Get-Capacities.ps1`: `fab ls .capacities -l` → `output/capacities.json`
 - `scripts/02-Get-Workspaces.ps1`: `fab ls -l` → capacity-linked and unassigned workspaces
 - `scripts/03-Get-WorkspaceItems.ps1`: native workspace `fab ls ... -l` → typed items
-- `scripts/04-Get-SemanticModels.ps1`: native `fab get ... -q . -f` → sources, tables, fields, calculated objects, measures, measure references, and relationships with keys
-- `scripts/05-Get-Reports.ps1`: native report definition → semantic-model connection and object references
+- `scripts/04-Get-SemanticModels.ps1`: native `fab get ... -q . -f` → sources, tables, fields, calculated objects, measures, qualified/unique-name measure dependencies, relationships with keys, hierarchies, calculation groups, perspectives, RLS roles, and extraction coverage
+- `scripts/05-Get-Reports.ps1`: native report definition → semantic-model connections, normalized page/visual bindings, raw references, and extraction coverage
 - `scripts/06-Build-Lineage.ps1`: builds lineage only between distinct objects: data source → semantic model and semantic model → report
 
 Run a block:
@@ -49,13 +51,21 @@ Run local parser tests:
 powershell.exe -NoProfile -File .\tests\Test-Reusable.ps1
 ```
 
+Run the complete local test suite:
+
+```powershell
+powershell.exe -NoProfile -File .\tests\Test-All.ps1
+```
+
 ## Coverage notes
 
 - Inventory covers objects visible to the current `fab` identity; it does not claim tenant-admin completeness.
 - Definition retrieval can fail for protected/service-managed models or insufficient permission. Failures are retained in JSON instead of silently skipped.
-- Measure dependency edges are resolved from DAX references in exported TMDL. Ambiguous column/measure names remain a documented limitation; exact engine dependency metadata would require a separate XMLA block rather than REST.
+- Measure dependencies use qualified references when available and unique-name resolution otherwise. Ambiguous references are retained explicitly instead of being asserted as dependencies; exact engine dependency metadata would require a separate XMLA block rather than REST.
+- Report bindings are normalized by page and visual while the original reference paths are retained for auditability.
+- Every semantic-model and report output includes coverage metadata; the document root summarizes complete, partial, and failed extraction counts.
 - Credentials are never exported. Data-source connection identity and model source expressions are inventory metadata and can still be sensitive.
 
 ## Verified run — 2026-09-28
 
-The complete native-CLI run produced 3 capacities, 114 workspaces, 459 items across 20 item types, 72 semantic models, and 40 reports. Definition extraction succeeded for 68 semantic models and 36 reports. Four service-managed models and their four reports denied definition export; their exact native CLI errors are retained in the JSON outputs. The normalized model output contains 263 tables, 2,852 fields, 187 measures, and 172 schema relationships. Table relationships and measure dependencies remain inside `semantic-models.json`; report field bindings remain inside `reports.json`. `lineage.json` contains 91 relationships between distinct objects: 55 data source → semantic model and 36 semantic model → report.
+The complete native-CLI run produced 3 capacities, 114 workspaces, 459 items across 20 item types, 72 semantic models, and 40 reports. Definition extraction succeeded for 68 semantic models and 36 reports. Four service-managed models and their four reports denied definition export; their exact native CLI errors are retained in the JSON outputs. The normalized model output contains 263 tables, 2,852 fields, 187 measures, 172 schema relationships, 90 hierarchies, 1 calculation group, 1 perspective, and 1 RLS role. It resolved 28 measure dependencies and retained 1 ambiguous reference without asserting a false edge. The report output contains 245 normalized visual bindings across 33 reports. Table relationships and measure dependencies remain inside `semantic-models.json`; report field bindings remain inside `reports.json`. `lineage.json` contains 91 relationships between distinct objects: 55 data source → semantic model and 36 semantic model → report.

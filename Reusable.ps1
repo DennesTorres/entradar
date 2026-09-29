@@ -119,6 +119,109 @@ function Get-DeclarationParts {
     }
 }
 
+function Remove-DaxNonCodeText {
+    param([string]$Expression)
+    if ([string]::IsNullOrWhiteSpace($Expression)) { return '' }
+    $value = [regex]::Replace($Expression, '(?s)/\*.*?\*/', ' ')
+    $value = [regex]::Replace($value, '(?m)//.*$', ' ')
+    $value = [regex]::Replace($value, '"(?:""|[^"])*"', ' ')
+    $value
+}
+
+function Resolve-DaxMeasureDependencies {
+    param([Parameter(Mandatory)]$Measure, [Parameter(Mandatory)][object[]]$AllMeasures)
+    $expression = Remove-DaxNonCodeText ([string]$Measure.expression)
+    $resolved = @()
+    $ambiguous = @()
+    $qualifiedSpans = @()
+
+    $qualifiedPattern = "(?:(?:'(?<quoted>(?:''|[^'])+)')|(?<plain>[A-Za-z_][A-Za-z0-9_ ]*))\s*\[(?<name>[^\]]+)\]"
+    foreach ($match in [regex]::Matches($expression, $qualifiedPattern)) {
+        $tableName = if ($match.Groups['quoted'].Success) { $match.Groups['quoted'].Value.Replace("''", "'") } else { $match.Groups['plain'].Value.Trim() }
+        $measureName = $match.Groups['name'].Value
+        $candidates = @($AllMeasures | Where-Object { $_.table -eq $tableName -and $_.name -eq $measureName })
+        if ($candidates.Count -eq 1 -and -not ($candidates[0].table -eq $Measure.table -and $candidates[0].name -eq $Measure.name)) {
+            $resolved += [pscustomobject]@{ table = $candidates[0].table; measure = $candidates[0].name; reference = $match.Value; resolution = 'qualified' }
+        }
+        $qualifiedSpans += [pscustomobject]@{ index = $match.Index; length = $match.Length }
+    }
+
+    foreach ($match in [regex]::Matches($expression, '(?<![A-Za-z0-9_''\]])\[(?<name>[^\]]+)\]')) {
+        $insideQualifiedReference = @($qualifiedSpans | Where-Object { $match.Index -ge $_.index -and $match.Index -lt ($_.index + $_.length) }).Count -gt 0
+        if ($insideQualifiedReference) { continue }
+        $measureName = $match.Groups['name'].Value
+        $candidates = @($AllMeasures | Where-Object name -eq $measureName)
+        if ($candidates.Count -eq 1) {
+            if (-not ($candidates[0].table -eq $Measure.table -and $candidates[0].name -eq $Measure.name)) {
+                $resolved += [pscustomobject]@{ table = $candidates[0].table; measure = $candidates[0].name; reference = $match.Value; resolution = 'uniqueName' }
+            }
+        } elseif ($candidates.Count -gt 1) {
+            $ambiguous += [pscustomobject]@{ reference = $match.Value; candidateMeasures = @($candidates | ForEach-Object { "$($_.table)[$($_.name)]" }) }
+        }
+    }
+
+    [pscustomobject]@{
+        resolved = @($resolved | Sort-Object table, measure -Unique)
+        ambiguous = @($ambiguous | Sort-Object reference -Unique)
+    }
+}
+
+function Get-TmdlGovernanceMetadata {
+    param([Parameter(Mandatory)]$Definition)
+    $hierarchies = @()
+    $calculationGroups = @()
+    foreach ($part in @($Definition.definition.parts | Where-Object { $_.path -like 'definition/tables/*.tmdl' })) {
+        $text = Get-DefinitionText $part
+        $tableMatch = [regex]::Match($text, '(?m)^table\s+(.+)$')
+        if (-not $tableMatch.Success) { continue }
+        $tableName = ConvertFrom-TmdlName $tableMatch.Groups[1].Value
+        foreach ($block in @(Get-TmdlBlocks -Text $text -Kind 'hierarchy')) {
+            $parts = Get-DeclarationParts -Declaration $block.Declaration -Kind 'hierarchy'
+            $levels = @()
+            foreach ($levelMatch in [regex]::Matches($block.Text, "(?m)^\t\tlevel\s+(.+?)(?:\s*=\s*(.+))?$")) {
+                $levels += [pscustomobject]@{ name = ConvertFrom-TmdlName $levelMatch.Groups[1].Value.Trim(); column = if ($levelMatch.Groups[2].Success) { $levelMatch.Groups[2].Value.Trim() } else { $null } }
+            }
+            $hierarchies += [pscustomobject]@{ table = $tableName; name = $parts.Name; levels = $levels }
+        }
+        if ($text -match '(?m)^\tcalculationGroup(?:\s|$)') {
+            $items = @()
+            foreach ($itemMatch in [regex]::Matches($text, "(?m)^\t\tcalculationItem\s+(.+?)(?:\s+=\s*(.*))?$")) {
+                $items += [pscustomobject]@{ name = ConvertFrom-TmdlName $itemMatch.Groups[1].Value.Trim(); expression = if ($itemMatch.Groups[2].Success) { $itemMatch.Groups[2].Value.Trim() } else { $null } }
+            }
+            $calculationGroups += [pscustomobject]@{ table = $tableName; precedence = if ($text -match '(?m)^\t\tprecedence:\s*(\d+)') { [int]$Matches[1] } else { $null }; items = $items }
+        }
+    }
+
+    $perspectives = @()
+    foreach ($part in @($Definition.definition.parts | Where-Object { $_.path -like 'definition/perspectives/*.tmdl' })) {
+        $text = Get-DefinitionText $part
+        $nameMatch = [regex]::Match($text, '(?m)^perspective\s+(.+)$')
+        $perspectives += [pscustomobject]@{
+            name = if ($nameMatch.Success) { ConvertFrom-TmdlName $nameMatch.Groups[1].Value } else { [System.IO.Path]::GetFileNameWithoutExtension($part.path) }
+            tables = @([regex]::Matches($text, '(?m)^\tperspectiveTable\s+(.+)$') | ForEach-Object { ConvertFrom-TmdlName $_.Groups[1].Value } | Sort-Object -Unique)
+        }
+    }
+
+    $roles = @()
+    foreach ($part in @($Definition.definition.parts | Where-Object { $_.path -like 'definition/roles/*.tmdl' })) {
+        $text = Get-DefinitionText $part
+        $nameMatch = [regex]::Match($text, '(?m)^role\s+(.+)$')
+        $permissions = @()
+        $permissionMatches = [regex]::Matches($text, '(?ms)^\ttablePermission\s+(.+?)\r?\n(?<body>(?:\t\t.*(?:\r?\n|$))*)')
+        foreach ($permissionMatch in $permissionMatches) {
+            $body = $permissionMatch.Groups['body'].Value
+            $filterMatch = [regex]::Match($body, '(?ms)^\t\tfilterExpression\s*=\s*(.+?)(?=^\t\t\w|\z)')
+            $permissions += [pscustomobject]@{ table = ConvertFrom-TmdlName $permissionMatch.Groups[1].Value.Trim(); filterExpression = if ($filterMatch.Success) { $filterMatch.Groups[1].Value.Trim() } else { $null } }
+        }
+        $roles += [pscustomobject]@{
+            name = if ($nameMatch.Success) { ConvertFrom-TmdlName $nameMatch.Groups[1].Value } else { [System.IO.Path]::GetFileNameWithoutExtension($part.path) }
+            modelPermission = if ($text -match '(?m)^\tmodelPermission:\s*(.+)$') { $Matches[1].Trim() } else { $null }
+            tablePermissions = $permissions
+        }
+    }
+    [pscustomobject]@{ hierarchies = $hierarchies; calculationGroups = $calculationGroups; perspectives = $perspectives; roles = $roles }
+}
+
 function ConvertFrom-TmdlSemanticModel {
     param([Parameter(Mandatory)]$Definition, [Parameter(Mandatory)][string]$WorkspaceName)
     $tables = @()
@@ -155,10 +258,11 @@ function ConvertFrom-TmdlSemanticModel {
         }
         $tables += [pscustomobject]@{ name = $tableName; kind = if ($tablePartitions.sourceType -contains 'calculated') { 'calculated' } else { 'regular' }; partitions = $tablePartitions }
     }
-    $measureNames = @($measures.name)
     foreach ($measure in $measures) {
-        $refs = [regex]::Matches([string]$measure.expression, '\[([^\]]+)\]') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique
-        $measure.dependencies = @($refs | Where-Object { $_ -in $measureNames -and $_ -ne $measure.name })
+        $dependencyResult = Resolve-DaxMeasureDependencies -Measure $measure -AllMeasures $measures
+        $measure.dependencies = @($dependencyResult.resolved | ForEach-Object measure | Sort-Object -Unique)
+        $measure | Add-Member -NotePropertyName dependencyDetails -NotePropertyValue @($dependencyResult.resolved)
+        $measure | Add-Member -NotePropertyName ambiguousDependencies -NotePropertyValue @($dependencyResult.ambiguous)
     }
     $relationships = @()
     $relationshipPart = @($Definition.definition.parts | Where-Object { $_.path -eq 'definition/relationships.tmdl' }) | Select-Object -First 1
@@ -177,11 +281,18 @@ function ConvertFrom-TmdlSemanticModel {
             }
         }
     }
+    $governance = Get-TmdlGovernanceMetadata -Definition $Definition
     [pscustomobject]@{
         id = $Definition.id; name = $Definition.displayName; workspaceId = $Definition.workspaceId; workspaceName = $WorkspaceName
         sourceMethod = 'fab get (native)'; format = $Definition.definition.format
         dataSources = @($Definition.connections); tables = $tables; columns = $columns; measures = $measures; relationships = $relationships
-        coverage = [pscustomobject]@{ definition = 'complete'; measureDependencyMethod = 'DAX reference resolution from exported TMDL'; caveat = 'Ambiguous column/measure names are resolved only when the referenced name matches a known measure.' }
+        hierarchies = @($governance.hierarchies); calculationGroups = @($governance.calculationGroups); perspectives = @($governance.perspectives); roles = @($governance.roles)
+        coverage = [pscustomobject]@{
+            status = 'complete'; definition = 'complete'
+            capturedCategories = @('dataSources','tables','columns','measures','measureDependencies','relationships','hierarchies','calculationGroups','perspectives','roles')
+            measureDependencyMethod = 'qualified and unique-name DAX reference resolution from exported TMDL'
+            ambiguousMeasureReferences = @($measures.ambiguousDependencies).Count
+        }
     }
 }
 
@@ -220,5 +331,33 @@ function ConvertFrom-PbirReport {
             $references += Get-JsonPropertyReferences -Node $json -Context $part.path
         } catch { }
     }
-    [pscustomobject]@{ id = $Definition.id; name = $Definition.displayName; workspaceId = $Definition.workspaceId; workspaceName = $WorkspaceName; sourceMethod = 'fab get (native)'; format = $Definition.definition.format; connections = @($Definition.connections); references = @($references | Sort-Object path, value -Unique) }
+    $references = @($references | Sort-Object path, value -Unique)
+    $visualGroups = @{}
+    foreach ($reference in $references) {
+        $pageId = $null; $visualId = $null
+        if ($reference.path -match 'report\.json\.sections\[(\d+)\]\.visualContainers\[(\d+)\]') { $pageId = "section-$($Matches[1])"; $visualId = "visual-$($Matches[2])" }
+        elseif ($reference.path -match 'definition/pages/([^/]+)/visuals/([^/]+)/visual\.json') { $pageId = $Matches[1]; $visualId = $Matches[2] }
+        if (-not $pageId -or -not $visualId) { continue }
+        $key = "$pageId|$visualId"
+        if (-not $visualGroups.ContainsKey($key)) { $visualGroups[$key] = [pscustomobject]@{ pageId = $pageId; visualId = $visualId; entities = @(); columns = @(); measures = @(); hierarchies = @(); sourcePaths = @() } }
+        $binding = $visualGroups[$key]
+        if ($reference.path -match '\.Entity$' -and $reference.value -is [string]) { $binding.entities += $reference.value }
+        elseif ($reference.path -match '\.Measure\.Property$' -and $reference.value -is [string]) { $binding.measures += $reference.value }
+        elseif ($reference.path -match '\.Column\.Property$' -and $reference.value -is [string]) { $binding.columns += $reference.value }
+        elseif ($reference.path -match '\.Hierarchy(?:Level)?\.Property$' -and $reference.value -is [string]) { $binding.hierarchies += $reference.value }
+        $binding.sourcePaths += $reference.path
+    }
+    $visualBindings = @($visualGroups.Values | ForEach-Object {
+        [pscustomobject]@{ pageId = $_.pageId; visualId = $_.visualId; entities = @($_.entities | Sort-Object -Unique); columns = @($_.columns | Sort-Object -Unique); measures = @($_.measures | Sort-Object -Unique); hierarchies = @($_.hierarchies | Sort-Object -Unique); sourcePaths = @($_.sourcePaths | Sort-Object -Unique) }
+    } | Sort-Object pageId, visualId)
+    $semanticModelReferences = @($references | Where-Object path -like '*connectionString' | ForEach-Object {
+        $idMatch = [regex]::Match([string]$_.value, '(?i)(?:^|;)semanticmodelid=([^;]+)')
+        if ($idMatch.Success) { [pscustomobject]@{ semanticModelId = $idMatch.Groups[1].Value; connectionString = $_.value } }
+    } | Sort-Object semanticModelId -Unique)
+    [pscustomobject]@{
+        id = $Definition.id; name = $Definition.displayName; workspaceId = $Definition.workspaceId; workspaceName = $WorkspaceName
+        sourceMethod = 'fab get (native)'; format = $Definition.definition.format; connections = @($Definition.connections)
+        semanticModelReferences = $semanticModelReferences; visualBindings = $visualBindings; references = $references
+        coverage = [pscustomobject]@{ status = 'complete'; definition = 'complete'; capturedCategories = @('semanticModelReferences','visualBindings','rawReferences'); visualCount = $visualBindings.Count }
+    }
 }
