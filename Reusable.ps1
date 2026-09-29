@@ -59,19 +59,21 @@ function Get-FabItemDefinition {
     $start = 0
     while ($start -lt $lines.Count -and $lines[$start].TrimStart() -notmatch '^[{[]') { $start++ }
     if ($start -ge $lines.Count) { throw "fab get returned no JSON for $Path" }
-    ($lines[$start..($lines.Count - 1)] -join [Environment]::NewLine) | ConvertFrom-Json -Depth 100
+    ($lines[$start..($lines.Count - 1)] -join [Environment]::NewLine) | ConvertFrom-Json
 }
 
 function Write-InventoryJson {
     param([Parameter(Mandatory)]$InputObject, [Parameter(Mandatory)][string]$Path)
     $parent = Split-Path -Parent $Path
     if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }
-    $InputObject | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $Path -Encoding utf8NoBOM
+    $json = $InputObject | ConvertTo-Json -Depth 100
+    $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $json, $utf8WithoutBom)
 }
 
 function Get-InventoryConfig {
     param([Parameter(Mandatory)][string]$Path)
-    Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json -Depth 20
+    Get-Content -Raw -LiteralPath $Path | ConvertFrom-Json
 }
 
 function Get-DefinitionText {
@@ -201,7 +203,7 @@ function Get-JsonPropertyReferences {
             $results += Get-JsonPropertyReferences -Node $property.Value -Context $next
         }
     } elseif ($Node -is [string] -and $Node.TrimStart() -match '^[{[]') {
-        try { $results += Get-JsonPropertyReferences -Node ($Node | ConvertFrom-Json -Depth 100) -Context $Context } catch { }
+        try { $results += Get-JsonPropertyReferences -Node ($Node | ConvertFrom-Json) -Context $Context } catch { }
     } elseif ($Node -is [System.Collections.IEnumerable] -and $Node -isnot [string]) {
         $index = 0
         foreach ($item in $Node) { $results += Get-JsonPropertyReferences -Node $item -Context "$Context[$index]"; $index++ }
@@ -214,7 +216,7 @@ function ConvertFrom-PbirReport {
     $references = @()
     foreach ($part in @($Definition.definition.parts | Where-Object { $_.path -match '(definition\.pbir|visual\.json|report\.json)$' })) {
         try {
-            $json = (Get-DefinitionText $part) | ConvertFrom-Json -Depth 100
+            $json = (Get-DefinitionText $part) | ConvertFrom-Json
             $references += Get-JsonPropertyReferences -Node $json -Context $part.path
         } catch { }
     }

@@ -1,3 +1,3 @@
 @echo off
-REM Run through cmd.exe because fab CLI 1.0.1 expects a Windows console for definition commands.
-pwsh -NoProfile -ExecutionPolicy Bypass -File "%~dp0Invoke-FabricInventory.ps1" %*
+REM Windows PowerShell 5.1-compatible launcher. Run from cmd.exe so fab has a Windows console.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Invoke-FabricInventory.ps1" %*

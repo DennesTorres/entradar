@@ -1,6 +1,6 @@
 # Fabric Inventory
 
-PowerShell inventory for the Fabric environment, built around native `fab` CLI commands.
+Windows PowerShell 5.1-compatible inventory for the Fabric environment, built around native `fab` CLI commands.
 
 For transferring and running this project on another machine, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
@@ -14,6 +14,8 @@ Both fallback levels are disabled in `config/inventory.config.json`. The current
 
 Compatibility marker: `fab version 1.0.1 (07-2025)`. `Reusable.ps1` is the file to copy into another project when these helpers are needed.
 
+Runtime compatibility was validated with Windows PowerShell `5.1.26100.9444`. PowerShell 7 is optional, not required.
+
 ## Individually testable blocks
 
 - `scripts/01-Get-Capacities.ps1`: `fab ls .capacities -l` → `output/capacities.json`
@@ -26,13 +28,13 @@ Compatibility marker: `fab version 1.0.1 (07-2025)`. `Reusable.ps1` is the file 
 Run a block:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\01-Get-Capacities.ps1
+powershell.exe -NoProfile -File .\scripts\01-Get-Capacities.ps1
 ```
 
 Scope an item-list test without scanning every workspace:
 
 ```powershell
-pwsh -NoProfile -File .\scripts\03-Get-WorkspaceItems.ps1 -WorkspaceName AdventureDS
+powershell.exe -NoProfile -File .\scripts\03-Get-WorkspaceItems.ps1 -WorkspaceName AdventureDS
 ```
 
 Run the united flow from a Windows console:
@@ -44,7 +46,7 @@ Run the united flow from a Windows console:
 Run local parser tests:
 
 ```powershell
-pwsh -NoProfile -File .\tests\Test-Reusable.ps1
+powershell.exe -NoProfile -File .\tests\Test-Reusable.ps1
 ```
 
 ## Coverage notes

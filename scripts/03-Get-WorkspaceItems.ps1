@@ -4,7 +4,8 @@ param(
     [string[]]$WorkspaceName
 )
 . (Join-Path $PSScriptRoot '..\Reusable.ps1')
-$workspaces = @(Get-Content -Raw -LiteralPath $WorkspacesPath | ConvertFrom-Json)
+$workspaces = Get-Content -Raw -LiteralPath $WorkspacesPath | ConvertFrom-Json
+$workspaces = @($workspaces)
 if ($WorkspaceName) { $workspaces = @($workspaces | Where-Object name -in $WorkspaceName) }
 $items = @(); $errors = @(); $i = 0
 foreach ($workspace in $workspaces) {

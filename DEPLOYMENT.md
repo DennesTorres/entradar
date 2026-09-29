@@ -9,7 +9,7 @@ The deployment ZIP contains the scripts, configuration, tests, reusable function
 ## Target-machine prerequisites
 
 - Windows with `cmd.exe`.
-- PowerShell 7 (`pwsh`).
+- Windows PowerShell 5.1 (`powershell.exe`) or later. PowerShell 7 is not required.
 - Python 3.10, 3.11, 3.12, or 3.13 available through `python`.
 - Network access to Microsoft Fabric sign-in and service endpoints.
 - A Fabric identity with access to the capacities, workspaces, items, semantic models, and reports that must be inventoried.
@@ -19,10 +19,13 @@ The deployment ZIP contains the scripts, configuration, tests, reusable function
 Open `cmd.exe` and run:
 
 ```bat
+powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion"
 python --version
 python -m pip install ms-fabric-cli==1.0.1
 fab --version
 ```
+
+The PowerShell version must be 5.1 or later.
 
 The expected CLI response is:
 
@@ -62,7 +65,7 @@ Run these native CLI checks before the inventory:
 fab --version
 fab ls .capacities -l
 fab ls -l
-pwsh -NoProfile -File tests\Test-Reusable.ps1
+powershell.exe -NoProfile -File tests\Test-Reusable.ps1
 ```
 
 Expected results:
@@ -81,7 +84,7 @@ From `cmd.exe` in the project folder:
 Invoke-FabricInventory.bat -Stage All
 ```
 
-The launcher uses PowerShell 7 and executes the blocks in this order:
+The launcher uses Windows PowerShell 5.1 and executes the blocks in this order:
 
 1. capacities;
 2. workspaces and capacity assignments;
@@ -110,12 +113,12 @@ Errors for inaccessible workspaces or definitions are retained inside the corres
 Each block can be tested independently:
 
 ```bat
-pwsh -NoProfile -File scripts\01-Get-Capacities.ps1
-pwsh -NoProfile -File scripts\02-Get-Workspaces.ps1
-pwsh -NoProfile -File scripts\03-Get-WorkspaceItems.ps1
-pwsh -NoProfile -File scripts\04-Get-SemanticModels.ps1
-pwsh -NoProfile -File scripts\05-Get-Reports.ps1
-pwsh -NoProfile -File scripts\06-Build-Lineage.ps1
+powershell.exe -NoProfile -File scripts\01-Get-Capacities.ps1
+powershell.exe -NoProfile -File scripts\02-Get-Workspaces.ps1
+powershell.exe -NoProfile -File scripts\03-Get-WorkspaceItems.ps1
+powershell.exe -NoProfile -File scripts\04-Get-SemanticModels.ps1
+powershell.exe -NoProfile -File scripts\05-Get-Reports.ps1
+powershell.exe -NoProfile -File scripts\06-Build-Lineage.ps1
 ```
 
 Later blocks depend on the JSON produced by earlier blocks.
