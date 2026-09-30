@@ -1,5 +1,8 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\Reusable.ps1')
+$reusableText = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\Reusable.ps1')
+if ($reusableText.Contains("'-f'")) { throw 'Get-FabItemDefinition uses the unsupported -f shorthand.' }
+if ($reusableText -notmatch "'--force'") { throw 'Get-FabItemDefinition does not use the portable --force option.' }
 $sample = @(
     'name                  id                                     capacityId',
     '-----------------------------------------------------------------------',

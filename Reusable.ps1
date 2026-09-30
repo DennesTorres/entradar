@@ -55,7 +55,8 @@ function Get-FabLongList {
 
 function Get-FabItemDefinition {
     param([Parameter(Mandatory)][string]$Path)
-    $lines = @(Invoke-FabText -Arguments @('get', $Path, '-q', '.', '-f'))
+    # Use the long option because some fabcli builds reject the -f shorthand.
+    $lines = @(Invoke-FabText -Arguments @('get', $Path, '-q', '.', '--force'))
     $start = 0
     while ($start -lt $lines.Count -and $lines[$start].TrimStart() -notmatch '^[{[]') { $start++ }
     if ($start -ge $lines.Count) { throw "fab get returned no JSON for $Path" }
