@@ -1,8 +1,17 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '..\Reusable.ps1')
 $reusableText = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '..\Reusable.ps1')
-if ($reusableText.Contains("'-f'")) { throw 'Get-FabItemDefinition uses the unsupported -f shorthand.' }
-if ($reusableText -notmatch "'--force'") { throw 'Get-FabItemDefinition does not use the portable --force option.' }
+if ($reusableText.Contains("'-f'") -or $reusableText.Contains("'--force'")) { throw 'Get-FabItemDefinition includes a force option.' }
+if (-not (Test-FabSyntaxError -Message "unknown shorthand flag: 'force'")) { throw 'fab syntax-error detection failed.' }
+
+function fab {
+    if ($args -contains '-f' -or $args -contains '--force') { $global:LASTEXITCODE = 1; "unknown shorthand flag: 'force'"; return }
+    $global:LASTEXITCODE = 0
+    '{"id":"mock-id","displayName":"Mock","workspaceId":"mock-workspace","connections":[],"definition":{"format":"TMDL","parts":[]}}'
+}
+$mockDefinition = Get-FabItemDefinition -Path 'Mock.Workspace/Mock.SemanticModel'
+Remove-Item -Path Function:\fab
+if ($mockDefinition.id -ne 'mock-id') { throw 'fab get without a force option failed.' }
 $sample = @(
     'name                  id                                     capacityId',
     '-----------------------------------------------------------------------',

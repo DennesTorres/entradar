@@ -63,6 +63,7 @@ Run these native CLI checks before the inventory:
 
 ```bat
 fab --version
+fab get --help
 fab ls .capacities -l
 fab ls -l
 powershell.exe -NoProfile -File tests\Test-All.ps1
@@ -75,6 +76,14 @@ Expected results:
 - The complete test suite ends with `All inventory tests passed.`
 
 If `fab ls` returns fewer workspaces than expected, verify the signed-in identity and its workspace roles before running the full inventory.
+
+Before the full run, test one accessible semantic model using its fab path:
+
+```powershell
+powershell.exe -NoProfile -File tests\Test-LiveDefinitionAccess.ps1 -Path '<workspace>.Workspace/<model>.SemanticModel'
+```
+
+Do not proceed to the full inventory unless the preflight ends with `Live definition preflight passed.` and reports non-zero definition parts. This prevents an unsupported fabcli option from being repeated for every semantic model.
 
 ## Run the complete inventory
 

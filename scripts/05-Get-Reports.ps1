@@ -7,7 +7,10 @@ foreach ($target in $targets) {
     $i++; Show-InventoryProgress -Current $i -Total $targets.Count -Message "$($target.workspaceName)/$($target.name)"
     $path = "$($target.workspacePath)/$(ConvertTo-FabPathSegment $target.name).Report"
     try { $reports += ConvertFrom-PbirReport -Definition (Get-FabItemDefinition -Path $path) -WorkspaceName $target.workspaceName }
-    catch { $errors += [pscustomobject]@{ id = $target.id; name = $target.name; workspaceId = $target.workspaceId; workspaceName = $target.workspaceName; sourceMethod = 'fab get (native)'; coverageStatus = 'failed'; error = $_.Exception.Message } }
+    catch {
+        if (Test-FabSyntaxError -Message $_.Exception.Message) { throw "Stopping report extraction after a fabcli command-syntax error. No remaining reports were attempted. $($_.Exception.Message)" }
+        $errors += [pscustomobject]@{ id = $target.id; name = $target.name; workspaceId = $target.workspaceId; workspaceName = $target.workspaceName; sourceMethod = 'fab get (native)'; coverageStatus = 'failed'; error = $_.Exception.Message }
+    }
 }
 Write-Progress -Activity 'Fabric inventory' -Completed
 $result = [pscustomobject]@{

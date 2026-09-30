@@ -53,10 +53,14 @@ function Get-FabLongList {
     @(Invoke-FabText -Arguments $arguments | Convert-FixedWidthTableToObjects)
 }
 
+function Test-FabSyntaxError {
+    param([string]$Message)
+    $Message -match '(?i)unknown\s+(?:shorthand\s+)?flag|unknown\s+option|unrecognized\s+(?:argument|option)'
+}
+
 function Get-FabItemDefinition {
     param([Parameter(Mandatory)][string]$Path)
-    # Use the long option because some fabcli builds reject the -f shorthand.
-    $lines = @(Invoke-FabText -Arguments @('get', $Path, '-q', '.', '--force'))
+    $lines = @(Invoke-FabText -Arguments @('get', $Path, '-q', '.'))
     $start = 0
     while ($start -lt $lines.Count -and $lines[$start].TrimStart() -notmatch '^[{[]') { $start++ }
     if ($start -ge $lines.Count) { throw "fab get returned no JSON for $Path" }
