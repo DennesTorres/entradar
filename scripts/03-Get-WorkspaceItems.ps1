@@ -12,9 +12,13 @@ foreach ($workspace in $workspaces) {
     $i++; Show-InventoryProgress -Current $i -Total $workspaces.Count -Message $workspace.name
     $path = "$(ConvertTo-FabPathSegment $workspace.name).$($workspace.type)"
     try {
-        foreach ($item in @(Get-FabLongList -Path $path)) {
+        $fabOutput = fab ls $path -l --output_format json 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "fab ls '$path' failed: $($fabOutput -join [Environment]::NewLine)" }
+        $fabResult = ($fabOutput -join [Environment]::NewLine) | ConvertFrom-Json
+        if ($fabResult.status -ne 'Success') { throw "fab ls '$path' failed: $($fabResult.result.message)" }
+        foreach ($item in @($fabResult.result.data)) {
             $type = if ($item.name -match '\.([^.]+)$') { $Matches[1] } else { 'Unknown' }
-            $items += [pscustomobject]@{ name = $item.name -replace '\.[^.]+$',''; type = $type; id = $item.id; workspaceId = $workspace.id; workspaceName = $workspace.name; workspacePath = $path; sourceMethod = "fab ls '$path' -l" }
+            $items += [pscustomobject]@{ name = $item.name -replace '\.[^.]+$',''; type = $type; id = $item.id; workspaceId = $workspace.id; workspaceName = $workspace.name; workspacePath = $path; sourceMethod = "fab ls '$path' -l --output_format json" }
         }
     } catch { $errors += [pscustomobject]@{ workspaceId = $workspace.id; workspaceName = $workspace.name; error = $_.Exception.Message } }
 }

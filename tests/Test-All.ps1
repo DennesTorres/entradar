@@ -1,6 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $tests = @(
     'Test-Reusable.ps1',
+    'Test-Fab17Commands.ps1',
     'Test-FabSyntaxFailFast.ps1',
     'Test-GovernanceMetadata.ps1',
     'Test-LineageSeparation.ps1'

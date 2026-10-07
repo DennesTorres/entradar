@@ -17,7 +17,7 @@ Supporting references are also included:
 - `Reusable.ps1` — shared functions and Fabric CLI compatibility marker.
 - `tests/Test-All.ps1` — complete reusable-function, governance-metadata, and lineage-separation validation suite.
 
-The minimum runtime requirements are Windows PowerShell 5.1, Python 3.10–3.13, and `ms-fabric-cli` 1.0.1. The exact prerequisite and installation commands are under **Target-machine prerequisites** and **Install the pinned Fabric CLI** in `DEPLOYMENT.md`.
+The minimum runtime requirements are Windows PowerShell 5.1, Python 3.10–3.13, and `ms-fabric-cli` 1.7.0. The exact prerequisite and installation commands are under **Target-machine prerequisites** and **Install the pinned Fabric CLI** in `DEPLOYMENT.md`.
 
 Authentication must be completed on the execution machine using the identity whose accessible Fabric environment should be inventoried:
 

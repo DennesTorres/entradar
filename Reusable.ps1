@@ -1,35 +1,6 @@
 # Reusable helpers copied forward from fabCLIPermissions and extended for Inventory.
-# Fabric CLI compatibility marker: fab version 1.0.1 (07-2025)
-$script:InventoryFabCliVersion = '1.0.1 (07-2025)'
-
-function Convert-FixedWidthTableToObjects {
-    [CmdletBinding()]
-    param([Parameter(ValueFromPipeline = $true)][string[]]$TableText)
-    begin { $lines = @() }
-    process { if ($null -ne $_) { $lines += $_.ToString() } }
-    end {
-        $lines = @($lines | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        if ($lines.Count -lt 2) { return @() }
-        $header = $lines[0]
-        $separator = $lines[1]
-        if ($separator -notmatch '^-{3,}') { throw 'Expected fab long-list output. Use -l.' }
-        $matches = [regex]::Matches($header, '\S+')
-        $columns = for ($index = 0; $index -lt $matches.Count; $index++) {
-            $start = $matches[$index].Index
-            $end = if ($index + 1 -lt $matches.Count) { $matches[$index + 1].Index } else { $separator.Length }
-            [pscustomobject]@{ Name = $matches[$index].Value; Start = $start; Length = $end - $start }
-        }
-        if ($lines.Count -eq 2) { return @() }
-        foreach ($line in $lines[2..($lines.Count - 1)]) {
-            $record = [ordered]@{}
-            foreach ($column in $columns) {
-                $value = if ($column.Start -ge $line.Length) { '' } else { $line.Substring($column.Start, [Math]::Min($column.Length, $line.Length - $column.Start)).Trim() }
-                $record[$column.Name] = $value
-            }
-            [pscustomobject]$record
-        }
-    }
-}
+# Fabric CLI compatibility marker: fab version 1.7.0
+$script:InventoryFabCliVersion = '1.7.0'
 
 function Show-InventoryProgress {
     param([int]$Current, [int]$Total, [string]$Message)
@@ -37,34 +8,9 @@ function Show-InventoryProgress {
     Write-Progress -Activity 'Fabric inventory' -Status "$percent% - $Message" -PercentComplete $percent
 }
 
-function Invoke-FabText {
-    [CmdletBinding()]
-    param([Parameter(Mandatory)][string[]]$Arguments)
-    $output = @(& fab @Arguments 2>&1 | ForEach-Object { $_.ToString() })
-    if ($LASTEXITCODE -ne 0) { throw "fab $($Arguments -join ' ') failed: $($output -join [Environment]::NewLine)" }
-    $output
-}
-
-function Get-FabLongList {
-    param([string]$Path)
-    $arguments = @('ls')
-    if ($Path) { $arguments += $Path }
-    $arguments += '-l'
-    @(Invoke-FabText -Arguments $arguments | Convert-FixedWidthTableToObjects)
-}
-
 function Test-FabSyntaxError {
     param([string]$Message)
     $Message -match '(?i)unknown\s+(?:shorthand\s+)?flag|unknown\s+option|unrecognized\s+(?:argument|option)'
-}
-
-function Get-FabItemDefinition {
-    param([Parameter(Mandatory)][string]$Path)
-    $lines = @(Invoke-FabText -Arguments @('get', $Path, '-q', '.'))
-    $start = 0
-    while ($start -lt $lines.Count -and $lines[$start].TrimStart() -notmatch '^[{[]') { $start++ }
-    if ($start -ge $lines.Count) { throw "fab get returned no JSON for $Path" }
-    ($lines[$start..($lines.Count - 1)] -join [Environment]::NewLine) | ConvertFrom-Json
 }
 
 function Write-InventoryJson {

@@ -6,8 +6,24 @@ $reports = @(); $errors = @(); $i = 0
 foreach ($target in $targets) {
     $i++; Show-InventoryProgress -Current $i -Total $targets.Count -Message "$($target.workspaceName)/$($target.name)"
     $path = "$($target.workspacePath)/$(ConvertTo-FabPathSegment $target.name).Report"
-    try { $reports += ConvertFrom-PbirReport -Definition (Get-FabItemDefinition -Path $path) -WorkspaceName $target.workspaceName }
+    try {
+        $previousErrorActionPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        $fabOutput = fab get $path -q . -f --output_format json 2>&1
+        $fabExitCode = $LASTEXITCODE
+        $ErrorActionPreference = $previousErrorActionPreference
+        if ($fabExitCode -ne 0) { throw "fab get '$path' failed: $($fabOutput -join [Environment]::NewLine)" }
+        $fabText = $fabOutput -join [Environment]::NewLine
+        $jsonStart = $fabText.IndexOf('{')
+        if ($jsonStart -lt 0) { throw "fab get '$path' returned no JSON." }
+        $fabResult = $fabText.Substring($jsonStart) | ConvertFrom-Json
+        if ($fabResult.status -ne 'Success') { throw "fab get '$path' failed: $($fabResult.result.message)" }
+        $definition = @($fabResult.result.data)[0]
+        if ($null -eq $definition) { throw "fab get '$path' returned no definition." }
+        $reports += ConvertFrom-PbirReport -Definition $definition -WorkspaceName $target.workspaceName
+    }
     catch {
+        $ErrorActionPreference = $previousErrorActionPreference
         if (Test-FabSyntaxError -Message $_.Exception.Message) { throw "Stopping report extraction after a fabcli command-syntax error. No remaining reports were attempted. $($_.Exception.Message)" }
         $errors += [pscustomobject]@{ id = $target.id; name = $target.name; workspaceId = $target.workspaceId; workspaceName = $target.workspaceName; sourceMethod = 'fab get (native)'; coverageStatus = 'failed'; error = $_.Exception.Message }
     }

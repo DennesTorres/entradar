@@ -14,16 +14,16 @@ For a source-control download and execution email, see [EMAIL-DEPLOYMENT-INSTRUC
 
 Both fallback levels are disabled in `config/inventory.config.json`. The current implementation uses native `fab` commands only.
 
-Compatibility marker: `fab version 1.0.1 (07-2025)`. `Reusable.ps1` is the file to copy into another project when these helpers are needed.
+Compatibility marker: `fab version 1.7.0`. `Reusable.ps1` contains reusable inventory parsing and output functions; the `fab` commands themselves are intentionally written directly in each stage script.
 
 Runtime compatibility was validated with Windows PowerShell `5.1.26100.9444`. PowerShell 7 is optional, not required.
 
 ## Individually testable blocks
 
-- `scripts/01-Get-Capacities.ps1`: `fab ls .capacities -l` → `output/capacities.json`
-- `scripts/02-Get-Workspaces.ps1`: `fab ls -l` → capacity-linked and unassigned workspaces
-- `scripts/03-Get-WorkspaceItems.ps1`: native workspace `fab ls ... -l` → typed items
-- `scripts/04-Get-SemanticModels.ps1`: native `fab get ... -q .` → sources, tables, fields, calculated objects, measures, qualified/unique-name measure dependencies, relationships with keys, hierarchies, calculation groups, perspectives, RLS roles, and extraction coverage
+- `scripts/01-Get-Capacities.ps1`: `fab ls .capacities -l --output_format json` → `output/capacities.json`
+- `scripts/02-Get-Workspaces.ps1`: `fab ls -l --output_format json` → capacity-linked and unassigned workspaces
+- `scripts/03-Get-WorkspaceItems.ps1`: native workspace `fab ls <path> -l --output_format json` → typed items
+- `scripts/04-Get-SemanticModels.ps1`: native `fab get <path> -q . -f --output_format json` → sources, tables, fields, calculated objects, measures, qualified/unique-name measure dependencies, relationships with keys, hierarchies, calculation groups, perspectives, RLS roles, and extraction coverage
 - `scripts/05-Get-Reports.ps1`: native report definition → semantic-model connections, normalized page/visual bindings, raw references, and extraction coverage
 - `scripts/06-Build-Lineage.ps1`: builds lineage only between distinct objects: data source → semantic model and semantic model → report
 
@@ -80,4 +80,6 @@ The complete native-CLI run produced 3 capacities, 114 workspaces, 459 items acr
 
 ## Target compatibility validation — 2026-09-30
 
-Definition retrieval now uses exactly `fab get <path> -q .`, with no force option. The Windows PowerShell 5.1 suite verifies the exact argument list and verifies that a fabcli command-syntax error stops after the first affected item instead of repeating the same failure for every item. Run the one-model live preflight on each target machine before a complete inventory.
+## Fabric CLI 1.7 compatibility — 2026-10-07
+
+All `fab ls` and `fab get` calls now request `--output_format json` and read the CLI 1.7 JSON envelope from `result.data`. The obsolete fixed-width table parser and generic command-execution wrappers were removed. Every native command is visible directly in its stage script. Definition retrieval uses `fab get <path> -q . -f --output_format json`. In Fabric CLI 1.7.0, `-f` is required for non-interactive definition retrieval because it acknowledges that sensitivity labels are not included; without it, captured execution fails while trying to open a confirmation prompt. Fabric CLI 1.7 also writes that sensitivity-label notice to stderr before its JSON document. Definition stages therefore capture native stderr with `ErrorActionPreference=Continue`, restore the caller's setting, locate the opening `{`, and parse the envelope. This is required by Windows PowerShell 5.1, where native stderr becomes a terminating error when the launcher uses `ErrorActionPreference=Stop`.

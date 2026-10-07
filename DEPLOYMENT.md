@@ -2,7 +2,7 @@
 
 ## What to transfer
 
-Transfer the complete clean project package: `Inventory-deployment-fabcli-1.0.1.zip`.
+Transfer the complete clean project package: `Inventory-deployment-fabcli-1.7.0.zip`.
 
 The deployment ZIP contains the scripts, configuration, tests, reusable functions, launcher, and an empty `output` folder. It deliberately excludes the JSON inventory generated on the source machine. Fabric authentication files and credentials are not part of the package.
 
@@ -21,7 +21,7 @@ Open `cmd.exe` and run:
 ```bat
 powershell.exe -NoProfile -Command "$PSVersionTable.PSVersion"
 python --version
-python -m pip install ms-fabric-cli==1.0.1
+python -m pip install --upgrade ms-fabric-cli==1.7.0
 fab --version
 ```
 
@@ -30,14 +30,14 @@ The PowerShell version must be 5.1 or later.
 The expected CLI response is:
 
 ```text
-fab version 1.0.1 (07-2025)
+fab version 1.7.0
 ```
 
 The project checks and records this compatibility version in `Reusable.ps1`. Do not silently upgrade the CLI for a production run; validate a newer version separately first.
 
 ## Copy and unpack
 
-1. Copy `Inventory-deployment-fabcli-1.0.1.zip` to the target machine.
+1. Copy `Inventory-deployment-fabcli-1.7.0.zip` to the target machine.
 2. Create a normal writable folder, for example `C:\FabricTools\Inventory`.
 3. Extract the ZIP contents into that folder.
 4. Confirm that `Invoke-FabricInventory.bat`, `Invoke-FabricInventory.ps1`, `Reusable.ps1`, `scripts`, `config`, `tests`, and `output` are present directly inside that folder.
@@ -64,14 +64,14 @@ Run these native CLI checks before the inventory:
 ```bat
 fab --version
 fab get --help
-fab ls .capacities -l
-fab ls -l
+fab ls .capacities -l --output_format json
+fab ls -l --output_format json
 powershell.exe -NoProfile -File tests\Test-All.ps1
 ```
 
 Expected results:
 
-- The CLI version is `1.0.1 (07-2025)`.
+- The CLI version is `1.7.0`.
 - Capacity and workspace tables are returned.
 - The complete test suite ends with `All inventory tests passed.`
 
